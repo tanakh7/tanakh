@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>תנ"ך — הספרייה הדיגיטלית</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@300;400;500;700;900&family=Heebo:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== HEADER ===== -->
+  <header class="header">
+    <div class="logo">
+      <span class="logo-emblem">✡</span>
+      <div class="logo-words">
+        <span class="logo-title">תנ"ך</span>
+        <span class="logo-subtitle">הספרייה הדיגיטלית</span>
+      </div>
+    </div>
+
+    <div class="search-bar">
+      <input id="searchInput" type="text" class="search-input"
+             placeholder="חיפוש פסוק, מילה או ביטוי..." autocomplete="off" />
+      <button id="searchBtn" class="search-btn">חיפוש</button>
+    </div>
+
+    <nav class="main-nav" id="mainNav">
+      <button class="nav-btn active" data-view="reader">📖 קריאה</button>
+      <button class="nav-btn" data-view="bookmarks">🔖 סימניות</button>
+      <button class="nav-btn" data-view="collection">🗂 האוסף שלי</button>
+    </nav>
+
+    <button class="menu-toggle" id="menuToggle" title="תפריט">☰</button>
+  </header>
+
+  <!-- ===== LAYOUT ===== -->
+  <div class="layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-inner">
+
+        <div class="book-section">
+          <button class="section-title" data-section="torah">
+            <span class="section-name">תּוֹרָה</span>
+            <span class="section-chevron">❯</span>
+          </button>
+          <div class="section-books" id="torah-books"></div>
+        </div>
+
+        <div class="book-section">
+          <button class="section-title" data-section="neviim">
+            <span class="section-name">נְבִיאִים</span>
+            <span class="section-chevron">❯</span>
+          </button>
+          <div class="section-books" id="neviim-books"></div>
+        </div>
+
+        <div class="book-section">
+          <button class="section-title" data-section="ketuvim">
+            <span class="section-name">כְּתוּבִים</span>
+            <span class="section-chevron">❯</span>
+          </button>
+          <div class="section-books" id="ketuvim-books"></div>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="content" id="mainContent"></main>
+
+  </div><!-- /.layout -->
+
+  <!-- ===== VERSE ACTION BAR (floating) ===== -->
+  <div class="verse-actions" id="verseActions" style="display:none">
+    <button class="vaction-btn" id="vaBookmark" title="שמור סימנייה">🔖</button>
+    <button class="vaction-btn" id="vaCollect"  title="הוסף לאוסף">🗂</button>
+    <button class="vaction-btn" id="vaShare"    title="שתף">📤</button>
+    <button class="vaction-btn" id="vaCopy"     title="העתק">📋</button>
+    <button class="vaction-btn va-close" id="vaClose" title="סגור">✕</button>
+  </div>
+
+  <!-- ===== SHARE MODAL ===== -->
+  <div class="modal-overlay" id="shareModal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">שתף פסוק</h3>
+        <button class="modal-close" id="shareModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <blockquote class="share-verse-preview" id="shareVersePreview"></blockquote>
+        <div class="share-grid">
+          <button class="share-platform whatsapp"  id="btnWhatsapp">
+            <span class="pi">📱</span> WhatsApp
+          </button>
+          <button class="share-platform telegram"  id="btnTelegram">
+            <span class="pi">✈️</span> Telegram
+          </button>
+          <button class="share-platform twitter"   id="btnTwitter">
+            <span class="pi">🐦</span> Twitter / X
+          </button>
+          <button class="share-platform facebook"  id="btnFacebook">
+            <span class="pi">👤</span> Facebook
+          </button>
+          <button class="share-platform copy-link" id="btnCopyShare">
+            <span class="pi">📋</span> העתק טקסט
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TOAST ===== -->
+  <div class="toast" id="toast"></div>
+
+</div><!-- /#app -->
+<script src="app.js"></script>
+</body>
+</html>
