@@ -176,42 +176,47 @@ async function fetchChapter(bookEn, chapter) {
 }
 
 async function searchSefaria(query) {
-  // Use Sefaria's search-wrapper with a simple GET request.
-  // GET never triggers a CORS preflight, so Sefaria's own
-  // Access-Control-Allow-Origin: * header is enough — no proxy needed.
-  const params = new URLSearchParams({
-    query,
-    type:           'text',
-    field:          'exact',
-    slop:           '0',
-    sort_type:      'score',
-    sort_direction: 'desc',
-    pgsize:         '100',
-    start:          '0',
-  });
-  const url = `https://www.sefaria.org/api/search-wrapper/?${params}`;
+  // Sefaria exposes an Elasticsearch endpoint that accepts simple GET requests.
+  // GET never triggers a CORS preflight, so no proxy is needed at all.
+  //
+  // Lucene filters:
+  //   lang:he                            → Hebrew text only
+  //   categories:Tanakh                  → must belong to the Tanakh category
+  //   NOT categories:"Tanakh Commentary" → exclude all commentary books
+  //
+  // The same verse often exists in multiple text versions (Nikkud,
+  // Ta'amei HaMikra, plain text…). We deduplicate by English ref after
+  // fetching. A client-side TANAKH_BOOKS_EN check acts as a safety net.
+
+  const safeQ  = query.replace(/"/g, '\\"');   // escape literal quotes
+  const lucene = `exact:"${safeQ}" AND lang:he AND categories:Tanakh AND NOT categories:"Tanakh Commentary"`;
+  const params = new URLSearchParams({ q: lucene, size: '50' });
+  const url    = `https://www.sefaria.org/api/search/text/_search?${params}`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   const hits = data?.hits?.hits || [];
 
+  const seen = new Set();
   return hits.map(h => {
-    const src         = h._source || {};
-    const text        = src.exact || '';
-    const displayHtml = h.highlight?.exact?.[0] || text;
-    const parsed      = parseEnRef(src.ref || '');
+    const src    = h._source || {};
+    const text   = src.exact || '';
+    const parsed = parseEnRef(src.ref || '');
     return {
-      heRef:   src.heRef || src.ref || '',
-      enRef:   src.ref   || '',
+      heRef:       src.heRef || src.ref || '',
+      enRef:       src.ref   || '',
       text,
-      displayHtml,
-      bookEn:  parsed?.book    || '',
-      chapter: parsed?.chapter || 1,
+      displayHtml: text,   // no server-side highlight available via GET
+      bookEn:      parsed?.book    || '',
+      chapter:     parsed?.chapter || 1,
     };
-  // Keep only verses from the 39 Tanakh books — filters out Talmud,
-  // Midrash, commentaries, and any English-language results.
-  }).filter(r => r.text && TANAKH_BOOKS_EN.has(r.bookEn));
+  }).filter(r => {
+    if (!r.text || !TANAKH_BOOKS_EN.has(r.bookEn)) return false;
+    if (seen.has(r.enRef)) return false;   // skip duplicate versions of same verse
+    seen.add(r.enRef);
+    return true;
+  });
 }
 
 // Parse an English Sefaria ref like "Genesis 1:1" or "I Samuel 15:3".
