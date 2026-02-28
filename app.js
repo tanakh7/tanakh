@@ -154,30 +154,62 @@ async function fetchChapter(bookEn, chapter) {
 }
 
 async function searchSefaria(query) {
+  // Correct endpoint: POST /api/search/text/_search with Elasticsearch query syntax.
+  // The old /api/search-wrapper/ endpoint blocked CORS preflight from external origins.
   const body = JSON.stringify({
-    query,
-    type: 'text',
-    lang: 'he',
-    size: 30,
     from: 0,
-    sort_type: 'relevance',
-    field: 'exact',
-    filters: ['Tanakh'],
-    filter_fields: ['path'],
+    size: 25,
+    _source: ['ref', 'heRef', 'exact', 'path'],
+    highlight: {
+      pre_tags:  ['<mark>'],
+      post_tags: ['</mark>'],
+      fields: { exact: { fragment_size: 400, number_of_fragments: 1 } },
+    },
+    query: {
+      bool: {
+        must: [
+          { match_phrase: { exact: { query } } },
+          { term: { lang: 'he' } },
+        ],
+        filter: [
+          { prefix: { path: 'Tanakh' } },
+        ],
+      },
+    },
   });
-  const res = await fetch('https://www.sefaria.org/api/search-wrapper/', {
-    method: 'POST',
+
+  const res = await fetch('https://www.sefaria.org/api/search/text/_search', {
+    method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   const hits = data?.hits?.hits || [];
-  return hits.map(h => ({
-    ref:   h._source?.heRef || h._source?.ref || '',
-    text:  stripHtml(h._source?.he  || h._source?.text || ''),
-    bookEn: (h._source?.ref || '').split(' ')[0],
-  })).filter(r => r.text);
+
+  return hits.map(h => {
+    const src  = h._source || {};
+    const text = src.exact || '';
+    // Sefaria highlight already contains <mark> tags from pre/post_tags above
+    const displayHtml = h.highlight?.exact?.[0] || text;
+    // Parse English ref: "Genesis 1:1" → book="Genesis", ch=1, vs=1
+    const parsed = parseEnRef(src.ref || '');
+    return {
+      heRef:   src.heRef || src.ref || '',
+      enRef:   src.ref   || '',
+      text,
+      displayHtml,
+      bookEn:  parsed?.book    || '',
+      chapter: parsed?.chapter || 1,
+    };
+  }).filter(r => r.text);
+}
+
+// Parse an English Sefaria ref like "Genesis 1:1" or "I Samuel 15:3"
+function parseEnRef(ref) {
+  const m = ref.match(/^(.+?)\s+(\d+):(\d+)$/);
+  if (!m) return null;
+  return { book: m[1], chapter: parseInt(m[2]), verse: parseInt(m[3]) };
 }
 
 // ===== SIDEBAR ==================================================
@@ -738,19 +770,13 @@ function renderSearchView(query) {
     return;
   }
 
-  const highlight = text => {
-    if (!q) return text;
-    const regex = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'g');
-    return text.replace(regex, '<mark>$1</mark>');
-  };
-
   content.innerHTML = `
     <h2 class="view-heading">🔍 תוצאות עבור "${q}"</h2>
     <p class="view-sub">${results.length} תוצאות</p>
     ${results.map((r, i) => `
       <div class="search-result" data-idx="${i}">
-        <div class="search-result-ref">${r.ref}</div>
-        <div class="search-result-text">${highlight(r.text)}</div>
+        <div class="search-result-ref">${r.heRef}</div>
+        <div class="search-result-text">${r.displayHtml}</div>
       </div>
     `).join('')}
   `;
@@ -758,22 +784,17 @@ function renderSearchView(query) {
   qsa('.search-result').forEach((el, i) => {
     el.addEventListener('click', () => {
       const r = results[i];
-      // Find book object by English name
+      // Find book by English name (handles multi-word names like "I Samuel")
       let foundBook = null, foundSec = null;
       Object.keys(SECTIONS).forEach(key => {
         SECTIONS[key].books.forEach(b => {
-          if (b.en.replace(/ /g,'_') === r.bookEn || b.en === r.bookEn) {
-            foundBook = b; foundSec = key;
-          }
+          if (b.en === r.bookEn) { foundBook = b; foundSec = key; }
         });
       });
       if (!foundBook) { showToast('לא ניתן לנווט לתוצאה זו'); return; }
 
-      // Parse chapter from ref  e.g. "בראשית א׳:א׳" – try English ref
-      const chMatch = (r.ref || '').match(/(\d+):/);
-      const ch = chMatch ? parseInt(chMatch[1]) : 1;
       state.book    = foundBook;
-      state.chapter = ch;
+      state.chapter = r.chapter;
       qsa('.book-btn').forEach(b => b.classList.remove('active'));
       if (foundSec) {
         $(`${foundSec}-books`).classList.add('open');
