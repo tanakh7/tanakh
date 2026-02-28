@@ -58,7 +58,7 @@ ul,ol { list-style:none; }
 }
 
 /* Logo */
-.logo { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.logo { display:flex; align-items:center; gap:10px; flex-shrink:0; cursor:pointer; }
 .logo-emblem {
   font-size:28px; color:var(--gold); line-height:1;
   filter:drop-shadow(0 0 6px rgba(200,150,47,.55));

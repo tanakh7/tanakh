@@ -442,17 +442,22 @@ function positionVerseActions(el) {
   const bar  = $('verseActions');
   bar.style.display = 'flex';
 
+  // getBoundingClientRect() is already viewport-relative, and the bar is
+  // position:fixed (also viewport-relative), so do NOT add window.scrollY.
   const rect = el.getBoundingClientRect();
-  const barH = 50;
-  let top = rect.top + window.scrollY - barH - 8;
-  if (top < window.scrollY + 8) top = rect.bottom + window.scrollY + 8;
+  const barH = bar.offsetHeight || 50;
+  const barW = bar.offsetWidth  || 210;
 
-  const barW   = bar.offsetWidth || 210;
+  // Prefer above the verse; fall back to below if too close to the top.
+  let top = rect.top - barH - 8;
+  if (top < 8) top = rect.bottom + 8;
+
+  // Centre horizontally over the verse, clamped to viewport edges.
   const center = rect.left + rect.width / 2;
   let left = center - barW / 2;
   left = Math.max(8, Math.min(left, window.innerWidth - barW - 8));
 
-  bar.style.top  = top + 'px';
+  bar.style.top  = top  + 'px';
   bar.style.left = left + 'px';
 }
 
@@ -847,6 +852,14 @@ function goToVerse(bookEn, chapter, verse) {
 // ===== GLOBAL WIRE-UPS ==========================================
 
 function wireEvents() {
+  // Logo → home
+  qs('.logo').addEventListener('click', () => {
+    state.book    = null;
+    state.chapter = 1;
+    qsa('.book-btn').forEach(b => b.classList.remove('active'));
+    setView('reader');
+  });
+
   // Search
   $('searchBtn').addEventListener('click', () => {
     performSearch($('searchInput').value.trim());
