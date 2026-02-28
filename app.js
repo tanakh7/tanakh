@@ -402,7 +402,7 @@ function renderReaderView() {
 function renderWelcome() {
   $('mainContent').innerHTML = `
     <div class="welcome">
-      <span class="welcome-emblem">🕎</span>
+      <span class="welcome-emblem">✦</span>
       <h1>תנ"ך — הספרייה הדיגיטלית</h1>
       <p class="welcome-tagline">בחר ספר מהתפריט, או התחל מאחד מהמקורות הנבחרים למטה</p>
       <div class="welcome-divider">• ✦ •</div>

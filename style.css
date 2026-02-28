@@ -175,6 +175,7 @@ ul,ol { list-style:none; }
 /* ===== WELCOME SCREEN ===== */
 .welcome { text-align:center; padding:50px 20px; }
 .welcome-emblem { font-size:72px; display:block; margin-bottom:16px;
+  color:var(--gold); filter:drop-shadow(0 0 14px rgba(200,150,47,.6));
   filter:drop-shadow(0 4px 12px rgba(200,150,47,.4)); }
 .welcome h1 {
   font-family:'Frank Ruhl Libre',serif;
