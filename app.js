@@ -154,8 +154,12 @@ async function fetchChapter(bookEn, chapter) {
 }
 
 async function searchSefaria(query) {
-  // Correct endpoint: POST /api/search/text/_search with Elasticsearch query syntax.
-  // The old /api/search-wrapper/ endpoint blocked CORS preflight from external origins.
+  // Sefaria's search requires POST + application/json, which triggers a CORS
+  // preflight that Sefaria blocks from external origins (like GitHub Pages).
+  // Solution: route through corsproxy.io, a free proxy that adds CORS headers.
+  const SEFARIA_SEARCH = 'https://www.sefaria.org/api/search/text/_search';
+  const PROXY_URL      = 'https://corsproxy.io/?' + encodeURIComponent(SEFARIA_SEARCH);
+
   const body = JSON.stringify({
     from: 0,
     size: 25,
@@ -178,7 +182,7 @@ async function searchSefaria(query) {
     },
   });
 
-  const res = await fetch('https://www.sefaria.org/api/search/text/_search', {
+  const res = await fetch(PROXY_URL, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body,
