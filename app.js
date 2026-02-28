@@ -331,9 +331,25 @@ function renderReaderView() {
     chOptions += `<option value="${i}" ${i === chapter ? 'selected' : ''}>פרק ${toHebrewNumeral(i)}</option>`;
   }
 
+  // Build set of verse IDs currently in the collection so we can
+  // show a placeholder instead of the text for those verses.
+  const collectedIds = new Set(loadCollection().map(c => c.id));
+
   // Verses HTML
   const versesHtml = verses.map((text, i) => {
-    const v = i + 1;
+    const v  = i + 1;
+    const id = makeId(book.en, chapter, v);
+
+    if (collectedIds.has(id)) {
+      // Verse was moved to the collection — show a visual gap / placeholder.
+      return `
+        <p class="verse verse-collected" data-verse="${v}" data-id="${id}"
+           title="פסוק זה נמצא באוסף שלך — לחץ להחזרה">
+          <span class="verse-number">${v}</span>
+          <span class="verse-collected-label">🗂 נמצא באוסף — לחץ להחזרה</span>
+        </p>`;
+    }
+
     return `
       <p class="verse" data-verse="${v}" role="button" tabindex="0" title="לחץ לאפשרויות">
         <span class="verse-number">${v}</span>
@@ -372,12 +388,21 @@ function renderReaderView() {
     el.addEventListener('click', () => onVerseClick(el));
     el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') onVerseClick(el); });
   });
+
+  // Collected-verse placeholder click → restore (remove from collection)
+  qsa('.verse-collected').forEach(el => {
+    el.addEventListener('click', () => {
+      saveCollection(loadCollection().filter(c => c.id !== el.dataset.id));
+      showToast('↩ הפסוק הוחזר לתנ"ך');
+      renderReaderView();
+    });
+  });
 }
 
 function renderWelcome() {
   $('mainContent').innerHTML = `
     <div class="welcome">
-      <span class="welcome-emblem">✡</span>
+      <span class="welcome-emblem">🕎</span>
       <h1>תנ"ך — הספרייה הדיגיטלית</h1>
       <p class="welcome-tagline">בחר ספר מהתפריט, או התחל מאחד מהמקורות הנבחרים למטה</p>
       <div class="welcome-divider">• ✦ •</div>
@@ -541,12 +566,17 @@ function addToCollection(v) {
   col.push(v);
   saveCollection(col);
   showToast('✅ נוסף לאוסף!');
+  // Immediately replace the verse with a placeholder in the reader.
+  if (state.view === 'reader') renderReaderView();
 }
 
 function removeFromCollection(id) {
   saveCollection(loadCollection().filter(c => c.id !== id));
-  renderCollectionView();
   showToast('🗑 הוסר מהאוסף');
+  // Re-render whichever view is active so both the collection list and any
+  // open reader chapter reflect the change immediately.
+  if (state.view === 'collection') renderCollectionView();
+  else if (state.view === 'reader') renderReaderView();
 }
 
 function moveCollectionItem(id, direction) {

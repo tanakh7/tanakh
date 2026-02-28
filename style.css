@@ -268,6 +268,26 @@ ul,ol { list-style:none; }
   font-size:20px; line-height:1.85; color:var(--text);
 }
 
+/* Collected-verse placeholder — shown instead of the verse text when the
+   verse has been moved to the personal collection. */
+.verse-collected {
+  display:flex; align-items:center; gap:0;
+  padding:9px 6px; border-radius:var(--radius);
+  border:2px dashed var(--gold-light);
+  background: repeating-linear-gradient(
+    135deg,
+    transparent, transparent 5px,
+    rgba(200,150,47,.06) 5px, rgba(200,150,47,.06) 10px
+  );
+  opacity:.55; cursor:pointer;
+  transition:opacity var(--ease), background var(--ease);
+}
+.verse-collected:hover { opacity:.85; background:rgba(200,150,47,.1); }
+.verse-collected-label {
+  font-family:'Heebo',sans-serif; font-size:13px;
+  color:var(--text-muted); font-style:italic;
+}
+
 /* Loading */
 .loading {
   display:flex; flex-direction:column; align-items:center;
