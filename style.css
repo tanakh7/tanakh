@@ -134,6 +134,23 @@ ul,ol { list-style:none; }
 }
 .sidebar-inner { padding:8px 0 32px; }
 
+/* Mobile-only nav — hidden on desktop, shown in sidebar on mobile */
+.mobile-nav {
+  display:none;
+  flex-direction:column; gap:4px;
+  padding:10px 10px 14px;
+  border-bottom:2px solid var(--border);
+}
+.mobile-nav .nav-btn {
+  display:block; width:100%; text-align:right;
+  padding:11px 14px; border-radius:7px;
+  font-family:'Frank Ruhl Libre',serif; font-size:16px;
+  color:var(--brown); font-weight:400;
+  white-space:nowrap;
+}
+.mobile-nav .nav-btn:hover { background:var(--gold-pale); color:var(--brown-dark); }
+.mobile-nav .nav-btn.active { background:var(--gold); color:var(--brown-dark); font-weight:700; }
+
 /* Book sections */
 .book-section { border-bottom:1px solid var(--border); }
 .section-title {
@@ -164,6 +181,18 @@ ul,ol { list-style:none; }
   background:var(--gold); color:var(--brown-dark); font-weight:700;
   border-right:4px solid var(--brown-dark); padding-right:24px;
 }
+.book-btn-wrap { display:flex; align-items:stretch; }
+.book-btn-wrap .book-btn { flex:1; width:auto; }
+.book-collect-btn {
+  flex-shrink:0; min-width:28px; padding:0 5px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px; color:var(--brown-light);
+  transition:all var(--ease); opacity:0;
+  font-family:'Heebo',sans-serif; font-weight:700;
+}
+.book-btn-wrap:hover .book-collect-btn { opacity:1; }
+.book-collect-btn:hover { color:var(--gold); background:var(--gold-pale); }
+.book-collect-btn.collected { opacity:1; color:var(--gold); }
 
 /* ===== MAIN CONTENT ===== */
 .content {
@@ -174,9 +203,8 @@ ul,ol { list-style:none; }
 
 /* ===== WELCOME SCREEN ===== */
 .welcome { text-align:center; padding:50px 20px; }
-.welcome-emblem { font-size:72px; display:block; margin-bottom:16px;
-  color:var(--gold); filter:drop-shadow(0 0 14px rgba(200,150,47,.6));
-  filter:drop-shadow(0 4px 12px rgba(200,150,47,.4)); }
+.welcome-emblem { display:block; margin:0 auto 28px;
+  color:var(--gold); filter:drop-shadow(0 4px 14px rgba(200,150,47,.5)); }
 .welcome h1 {
   font-family:'Frank Ruhl Libre',serif;
   font-size:40px; font-weight:900; color:var(--brown-dark); margin-bottom:8px;
@@ -247,6 +275,14 @@ ul,ol { list-style:none; }
 }
 .btn-ch:hover:not(:disabled) { background:var(--gold); color:var(--brown-dark); }
 .btn-ch:disabled { opacity:.35; cursor:not-allowed; }
+.btn-ch-collect {
+  padding:6px 12px; border:1px dashed var(--border);
+  border-radius:var(--radius); color:var(--text-muted);
+  font-size:13px; font-family:'Heebo',sans-serif;
+  transition:all var(--ease); white-space:nowrap;
+}
+.btn-ch-collect:hover { border-color:var(--gold); color:var(--gold); background:var(--gold-pale); }
+.btn-ch-collect.collected { border-color:var(--gold); color:var(--gold); background:var(--gold-pale); font-weight:600; cursor:default; }
 
 /* Verses */
 .verses-container { padding:4px 0; }
@@ -284,6 +320,17 @@ ul,ol { list-style:none; }
   transition:opacity var(--ease), background var(--ease);
 }
 .verse-collected:hover { opacity:.85; background:rgba(200,150,47,.1); }
+/* Chapter/book collected notice shown instead of verse list */
+.chapter-collected-notice {
+  text-align:center; padding:52px 24px; margin-top:16px;
+  border:2px dashed var(--gold-light); border-radius:10px;
+  background:repeating-linear-gradient(135deg,
+    transparent, transparent 6px,
+    rgba(200,150,47,.04) 6px, rgba(200,150,47,.04) 12px);
+  color:var(--text-muted); font-family:'Heebo',sans-serif;
+}
+.chapter-collected-notice .notice-icon { font-size:36px; display:block; margin-bottom:14px; opacity:.5; }
+.chapter-collected-notice p { font-size:15px; margin-bottom:18px; line-height:1.65; }
 .verse-collected-label {
   font-family:'Heebo',sans-serif; font-size:13px;
   color:var(--text-muted); font-style:italic;
@@ -444,6 +491,13 @@ ul,ol { list-style:none; }
 .coll-item-text {
   font-family:'Frank Ruhl Libre',serif;
   font-size:17px; color:var(--text); line-height:1.7;
+}
+.coll-item-type {
+  display:inline-block;
+  font-family:'Heebo',sans-serif; font-size:10px; font-weight:700;
+  letter-spacing:1px; text-transform:uppercase;
+  color:var(--gold); background:var(--gold-pale);
+  padding:2px 9px; border-radius:10px; margin-bottom:6px;
 }
 
 .coll-item-controls {
@@ -609,6 +663,9 @@ ul,ol { list-style:none; }
   .logo-subtitle { display:none; }
   .search-bar { max-width:180px; }
 
+  /* Show mobile nav inside the sidebar */
+  .mobile-nav { display:flex; }
+
   .sidebar {
     transform:translateX(100%);
   }
@@ -618,7 +675,17 @@ ul,ol { list-style:none; }
   }
 
   .content { margin-right:0; padding:18px 16px; }
-  .quick-grid { grid-template-columns:1fr 1fr; }
+
+  /* Welcome screen — reduce padding so cards have more room */
+  .welcome { padding:30px 4px; }
+  .quick-grid { grid-template-columns:1fr 1fr; gap:10px; max-width:100%; }
+
+  /* Ensure quick-card text is always visible on mobile */
+  .quick-card { padding:14px 8px; background:#FFFDF7; }
+  .quick-card-icon { font-size:22px; }
+  .quick-card-label { font-size:14px; color:#2C1A0E; word-break:break-word; }
+  .quick-card-sub { font-size:10px; color:#7A5C3C; }
+
   .share-grid { grid-template-columns:1fr; }
   .copy-link { grid-column:span 1; }
   .chapter-nav { flex-direction:column; align-items:flex-start; }
@@ -626,5 +693,5 @@ ul,ol { list-style:none; }
 }
 
 @media (max-width:480px) {
-  .quick-grid { grid-template-columns:1fr; max-width:280px; }
+  .quick-grid { grid-template-columns:1fr 1fr; }
 }

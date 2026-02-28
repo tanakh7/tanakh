@@ -224,20 +224,69 @@ function searchLocal(query) {
   return results;
 }
 
+// Build the verses HTML for a chapter, respecting per-verse collection state.
+function buildVersesHtml(verses, book, chapter, col) {
+  const collectedIds = new Set(
+    col.filter(c => !c.type || c.type === 'verse').map(c => c.id)
+  );
+  return verses.map((text, i) => {
+    const v  = i + 1;
+    const id = makeId(book.en, chapter, v);
+    if (collectedIds.has(id)) {
+      return `
+        <p class="verse verse-collected" data-verse="${v}" data-id="${id}"
+           title="פסוק זה נמצא באוסף שלך — לחץ להחזרה">
+          <span class="verse-number">${v}</span>
+          <span class="verse-collected-label">🗂 נמצא באוסף — לחץ להחזרה</span>
+        </p>`;
+    }
+    return `
+      <p class="verse" data-verse="${v}" role="button" tabindex="0" title="לחץ לאפשרויות">
+        <span class="verse-number">${v}</span>
+        <span class="verse-text">${text}</span>
+      </p>`;
+  }).join('');
+}
+
 // ===== SIDEBAR ==================================================
 
 function buildSidebar() {
+  const col = loadCollection();
   Object.keys(SECTIONS).forEach(sectionKey => {
     const sec  = SECTIONS[sectionKey];
     const wrap = $(`${sectionKey}-books`);
     wrap.innerHTML = '';
     sec.books.forEach(book => {
+      const isBookCollected = col.some(c => c.type === 'book' && c.id === book.en);
+
+      const itemWrap = document.createElement('div');
+      itemWrap.className = 'book-btn-wrap';
+
       const btn = document.createElement('button');
       btn.className = 'book-btn';
       btn.textContent = book.heShort;
       btn.dataset.en = book.en;
       btn.addEventListener('click', () => selectBook(book, sectionKey));
-      wrap.appendChild(btn);
+
+      const collectBtn = document.createElement('button');
+      collectBtn.className = `book-collect-btn${isBookCollected ? ' collected' : ''}`;
+      collectBtn.title = isBookCollected ? 'הספר באוסף — לחץ להסרה' : 'הוסף ספר לאוסף';
+      collectBtn.textContent = isBookCollected ? '✓' : '+';
+      collectBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (isBookCollected) {
+          saveCollection(loadCollection().filter(c => !(c.type === 'book' && c.id === book.en)));
+          showToast('↩ הספר הוחזר לתנ"ך');
+          buildSidebar();
+          if (state.view === 'reader' && state.book?.en === book.en) renderReaderView();
+        } else {
+          addBookToCollection(book);
+        }
+      });
+
+      itemWrap.appendChild(btn);
+      itemWrap.appendChild(collectBtn);
+      wrap.appendChild(itemWrap);
     });
   });
 
@@ -324,6 +373,13 @@ function renderReaderView() {
 
   const { book, chapter, verses } = state;
   const chCount = book.chapters;
+  const col     = loadCollection();
+
+  // Check if entire book or chapter is in the collection.
+  const bookCollected    = col.some(c => c.type === 'book'    && c.id === book.en);
+  const chapterId        = `${book.en}|${chapter}`;
+  const chapterCollected = !bookCollected && col.some(c => c.type === 'chapter' && c.id === chapterId);
+  const isChCollected    = bookCollected || chapterCollected;
 
   // Chapter selector options
   let chOptions = '';
@@ -331,31 +387,17 @@ function renderReaderView() {
     chOptions += `<option value="${i}" ${i === chapter ? 'selected' : ''}>פרק ${toHebrewNumeral(i)}</option>`;
   }
 
-  // Build set of verse IDs currently in the collection so we can
-  // show a placeholder instead of the text for those verses.
-  const collectedIds = new Set(loadCollection().map(c => c.id));
+  const collectBtnLabel = isChCollected ? '✓ הפרק באוסף' : 'הוסף פרק לאוסף';
 
-  // Verses HTML
-  const versesHtml = verses.map((text, i) => {
-    const v  = i + 1;
-    const id = makeId(book.en, chapter, v);
-
-    if (collectedIds.has(id)) {
-      // Verse was moved to the collection — show a visual gap / placeholder.
-      return `
-        <p class="verse verse-collected" data-verse="${v}" data-id="${id}"
-           title="פסוק זה נמצא באוסף שלך — לחץ להחזרה">
-          <span class="verse-number">${v}</span>
-          <span class="verse-collected-label">🗂 נמצא באוסף — לחץ להחזרה</span>
-        </p>`;
-    }
-
-    return `
-      <p class="verse" data-verse="${v}" role="button" tabindex="0" title="לחץ לאפשרויות">
-        <span class="verse-number">${v}</span>
-        <span class="verse-text">${text}</span>
-      </p>`;
-  }).join('');
+  const bodyHtml = isChCollected
+    ? `<div class="chapter-collected-notice" id="chapterCollectedNotice">
+        <span class="notice-icon">🗂</span>
+        <p>פרק זה ${bookCollected ? `(כחלק מספר ${book.heShort})` : ''} נמצא באוסף האישי שלך</p>
+        <button class="btn-secondary" id="btnRestoreChapter">↩ החזר לתנ"ך</button>
+      </div>`
+    : `<div class="verses-container" id="versesContainer">
+        ${buildVersesHtml(verses, book, chapter, col) || '<p class="error-box">לא נמצא טקסט לפרק זה.</p>'}
+      </div>`;
 
   content.innerHTML = `
     <div class="reader-header">
@@ -366,12 +408,13 @@ function renderReaderView() {
         <select class="chapter-select" id="chapterSelect">${chOptions}</select>
         <button class="btn-ch" id="btnPrev" ${chapter <= 1 ? 'disabled' : ''}>◀ הקודם</button>
         <button class="btn-ch" id="btnNext" ${chapter >= chCount ? 'disabled' : ''}>הבא ▶</button>
+        <button class="btn-ch-collect ${isChCollected ? 'collected' : ''}" id="btnCollectChapter">${collectBtnLabel}</button>
       </div>
     </div>
-    <div class="verses-container" id="versesContainer">${versesHtml || '<p class="error-box">לא נמצא טקסט לפרק זה.</p>'}</div>
+    ${bodyHtml}
   `;
 
-  // Events
+  // Nav events (always active)
   $('chapterSelect').addEventListener('change', e => {
     state.chapter = parseInt(e.target.value);
     loadAndRenderChapter();
@@ -382,30 +425,52 @@ function renderReaderView() {
   $('btnNext').addEventListener('click', () => {
     if (state.chapter < chCount) { state.chapter++; loadAndRenderChapter(); }
   });
-
-  // Verse click → action bar
-  qsa('.verse').forEach(el => {
-    el.addEventListener('click', () => onVerseClick(el));
-    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') onVerseClick(el); });
+  $('btnCollectChapter').addEventListener('click', () => {
+    if (!isChCollected) addChapterToCollection();
   });
 
-  // Collected-verse placeholder click → restore (remove from collection)
-  qsa('.verse-collected').forEach(el => {
-    el.addEventListener('click', () => {
-      saveCollection(loadCollection().filter(c => c.id !== el.dataset.id));
-      showToast('↩ הפסוק הוחזר לתנ"ך');
+  if (isChCollected) {
+    $('btnRestoreChapter').addEventListener('click', () => {
+      if (bookCollected) {
+        saveCollection(loadCollection().filter(c => !(c.type === 'book' && c.id === book.en)));
+        showToast('↩ הספר הוחזר לתנ"ך');
+        buildSidebar();
+      } else {
+        saveCollection(loadCollection().filter(c => !(c.type === 'chapter' && c.id === chapterId)));
+        showToast('↩ הפרק הוחזר לתנ"ך');
+      }
       renderReaderView();
     });
-  });
+  } else {
+    // Verse click → action bar
+    qsa('.verse').forEach(el => {
+      el.addEventListener('click', () => onVerseClick(el));
+      el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') onVerseClick(el); });
+    });
+    // Collected-verse placeholder click → restore
+    qsa('.verse-collected').forEach(el => {
+      el.addEventListener('click', () => {
+        saveCollection(loadCollection().filter(c => c.id !== el.dataset.id));
+        showToast('↩ הפסוק הוחזר לתנ"ך');
+        renderReaderView();
+      });
+    });
+  }
 }
 
 function renderWelcome() {
   $('mainContent').innerHTML = `
     <div class="welcome">
-      <span class="welcome-emblem">✦</span>
+      <svg class="welcome-emblem" viewBox="0 0 200 60" width="200" height="60" fill="currentColor" aria-hidden="true">
+        <path d="M100,14 L107,30 L100,46 L93,30 Z"/>
+        <path d="M93,30 C82,22 62,17 42,26 C26,33 14,32 8,30 C14,28 26,27 42,34 C62,43 82,38 93,30 Z"/>
+        <path d="M107,30 C118,22 138,17 158,26 C174,33 186,32 192,30 C186,28 174,27 158,34 C138,43 118,38 107,30 Z"/>
+        <circle cx="5" cy="30" r="3.5"/>
+        <circle cx="195" cy="30" r="3.5"/>
+      </svg>
       <h1>תנ"ך — הספרייה הדיגיטלית</h1>
       <p class="welcome-tagline">בחר ספר מהתפריט, או התחל מאחד מהמקורות הנבחרים למטה</p>
-      <div class="welcome-divider">• ✦ •</div>
+      <div class="welcome-divider">· · ·</div>
       <div class="quick-grid">
         ${QUICK_BOOKS.map(q => `
           <div class="quick-card" data-en="${q.bookEn}" data-ch="${q.chapter}" data-sec="${q.sectionKey}">
@@ -563,18 +628,60 @@ function addToCollection(v) {
   if (!v) return;
   const col = loadCollection();
   if (col.find(c => c.id === v.id)) { showToast('הפסוק כבר באוסף 📋'); return; }
+  // Block if the chapter or book is already collected.
+  const chId = `${v.bookEn}|${v.chapter}`;
+  if (col.find(c => (c.type === 'chapter' && c.id === chId) || (c.type === 'book' && c.id === v.bookEn))) {
+    showToast('הפרק/ספר כבר באוסף 📋'); return;
+  }
+  v.type = v.type || 'verse';
   col.push(v);
   saveCollection(col);
   showToast('✅ נוסף לאוסף!');
-  // Immediately replace the verse with a placeholder in the reader.
+  if (state.view === 'reader') renderReaderView();
+}
+
+function addChapterToCollection() {
+  const { book, chapter } = state;
+  if (!book) return;
+  const col     = loadCollection();
+  const chId    = `${book.en}|${chapter}`;
+  if (col.find(c => c.id === chId)) { showToast('הפרק כבר באוסף 📋'); return; }
+  // Remove any individual verse items from this chapter first.
+  const filtered = col.filter(c => !(c.bookEn === book.en && c.chapter === chapter && (!c.type || c.type === 'verse')));
+  filtered.push({
+    id: chId, type: 'chapter',
+    bookHe: book.heShort, bookEn: book.en,
+    chapter,
+    ref: `${book.heShort} פרק ${toHebrewNumeral(chapter)}`,
+  });
+  saveCollection(filtered);
+  showToast('✅ הפרק נוסף לאוסף!');
+  if (state.view === 'reader') renderReaderView();
+}
+
+function addBookToCollection(bookObj) {
+  if (!bookObj) return;
+  const col = loadCollection();
+  if (col.find(c => c.type === 'book' && c.id === bookObj.en)) { showToast('הספר כבר באוסף 📋'); return; }
+  // Remove all individual verse/chapter items from this book first.
+  const filtered = col.filter(c => c.bookEn !== bookObj.en);
+  filtered.push({
+    id: bookObj.en, type: 'book',
+    bookHe: bookObj.heShort, bookEn: bookObj.en,
+    ref: `ספר ${bookObj.heShort}`,
+  });
+  saveCollection(filtered);
+  showToast('✅ הספר נוסף לאוסף!');
+  buildSidebar();
   if (state.view === 'reader') renderReaderView();
 }
 
 function removeFromCollection(id) {
-  saveCollection(loadCollection().filter(c => c.id !== id));
+  const col  = loadCollection();
+  const item = col.find(c => c.id === id);
+  saveCollection(col.filter(c => c.id !== id));
   showToast('🗑 הוסר מהאוסף');
-  // Re-render whichever view is active so both the collection list and any
-  // open reader chapter reflect the change immediately.
+  if (item?.type === 'book') buildSidebar(); // refresh sidebar collect-button state
   if (state.view === 'collection') renderCollectionView();
   else if (state.view === 'reader') renderReaderView();
 }
@@ -603,26 +710,37 @@ function renderCollectionView() {
         <p>לחץ על פסוק בעת קריאה ובחר "הוסף לאוסף".</p>
       </div>`;
 
-  const items = col.map((item, idx) => `
-    <li class="collection-item"
-        draggable="true"
-        data-id="${item.id}"
-        data-idx="${idx}">
-      <div class="drag-handle" title="גרור לסידור מחדש">⠿</div>
-      <div class="coll-item-body">
-        <div class="coll-item-ref">${item.ref}</div>
-        <div class="coll-item-text">${item.text}</div>
-      </div>
-      <div class="coll-item-controls">
-        <button class="coll-ctrl-btn" title="העלה" onclick="moveCollectionItem('${item.id}',-1)">▲</button>
-        <button class="coll-ctrl-btn" title="שתף"  onclick='showShareModal(${JSON.stringify(item)})'>📤</button>
-        <button class="coll-ctrl-btn" title="קרא"
-          onclick="goToVerse('${item.bookEn}','${item.chapter}','${item.verse}')">📖</button>
-        <button class="coll-ctrl-btn del" title="הסר" onclick="removeFromCollection('${item.id}')">🗑</button>
-        <button class="coll-ctrl-btn" title="הורד" onclick="moveCollectionItem('${item.id}',1)">▼</button>
-      </div>
-    </li>
-  `).join('');
+  const items = col.map((item, idx) => {
+    const type = item.type || 'verse';
+    let bodyHtml = '';
+    let readOnclick = '';
+    let shareBtn = '';
+
+    if (type === 'verse') {
+      bodyHtml    = `<div class="coll-item-ref">${item.ref}</div><div class="coll-item-text">${item.text}</div>`;
+      readOnclick = `goToVerse('${item.bookEn}','${item.chapter}','${item.verse}')`;
+      shareBtn    = `<button class="coll-ctrl-btn" title="שתף" onclick='showShareModal(${JSON.stringify(item)})'>📤</button>`;
+    } else if (type === 'chapter') {
+      bodyHtml    = `<div class="coll-item-type">פרק</div><div class="coll-item-ref">${item.ref}</div>`;
+      readOnclick = `goToChapter('${item.bookEn}',${item.chapter})`;
+    } else if (type === 'book') {
+      bodyHtml    = `<div class="coll-item-type">ספר</div><div class="coll-item-ref">${item.ref}</div>`;
+      readOnclick = `goToChapter('${item.bookEn}',1)`;
+    }
+
+    return `
+      <li class="collection-item" draggable="true" data-id="${item.id}" data-idx="${idx}">
+        <div class="drag-handle" title="גרור לסידור מחדש">⠿</div>
+        <div class="coll-item-body">${bodyHtml}</div>
+        <div class="coll-item-controls">
+          <button class="coll-ctrl-btn" title="העלה" onclick="moveCollectionItem('${item.id}',-1)">▲</button>
+          ${shareBtn}
+          <button class="coll-ctrl-btn" title="קרא" onclick="${readOnclick}">📖</button>
+          <button class="coll-ctrl-btn del" title="הסר" onclick="removeFromCollection('${item.id}')">🗑</button>
+          <button class="coll-ctrl-btn" title="הורד" onclick="moveCollectionItem('${item.id}',1)">▼</button>
+        </div>
+      </li>`;
+  }).join('');
 
   content.innerHTML = `
     <div class="view-header">
@@ -879,6 +997,27 @@ function goToVerse(bookEn, chapter, verse) {
   loadAndRenderChapter();
 }
 
+function goToChapter(bookEn, chapter) {
+  let foundBook = null, foundSec = null;
+  Object.keys(SECTIONS).forEach(key => {
+    SECTIONS[key].books.forEach(b => {
+      if (b.en === bookEn) { foundBook = b; foundSec = key; }
+    });
+  });
+  if (!foundBook) return;
+  state.book    = foundBook;
+  state.chapter = parseInt(chapter);
+  qsa('.book-btn').forEach(b => b.classList.remove('active'));
+  if (foundSec) {
+    $(`${foundSec}-books`).classList.add('open');
+    $(`[data-section="${foundSec}"]`)?.classList.add('open');
+    const btn = [...$(`${foundSec}-books`).querySelectorAll('.book-btn')].find(b => b.dataset.en === bookEn);
+    btn?.classList.add('active');
+  }
+  setView('reader');
+  loadAndRenderChapter();
+}
+
 // ===== GLOBAL WIRE-UPS ==========================================
 
 function wireEvents() {
@@ -898,9 +1037,12 @@ function wireEvents() {
     if (e.key === 'Enter') performSearch($('searchInput').value.trim());
   });
 
-  // Nav buttons
+  // Nav buttons (header + mobile sidebar)
   qsa('.nav-btn').forEach(btn => {
-    btn.addEventListener('click', () => setView(btn.dataset.view));
+    btn.addEventListener('click', () => {
+      setView(btn.dataset.view);
+      closeSidebar(); // no-op on desktop; closes sidebar panel on mobile
+    });
   });
 
   // Mobile menu toggle
