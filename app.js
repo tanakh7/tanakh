@@ -176,52 +176,31 @@ async function fetchChapter(bookEn, chapter) {
 }
 
 async function searchSefaria(query) {
-  // Sefaria's search requires POST + application/json, which triggers a CORS
-  // preflight that Sefaria blocks from external origins (like GitHub Pages).
-  // Solution: route through corsproxy.io, a free proxy that adds CORS headers.
-  const SEFARIA_SEARCH = 'https://www.sefaria.org/api/search/text/_search';
-  const PROXY_URL      = 'https://corsproxy.io/?' + encodeURIComponent(SEFARIA_SEARCH);
-
-  const body = JSON.stringify({
-    from: 0,
-    size: 25,
-    _source: ['ref', 'heRef', 'exact', 'path'],
-    highlight: {
-      pre_tags:  ['<mark>'],
-      post_tags: ['</mark>'],
-      fields: { exact: { fragment_size: 400, number_of_fragments: 1 } },
-    },
-    query: {
-      bool: {
-        must: [
-          { match_phrase: { exact: { query } } },
-          { term: { lang: 'he' } },
-        ],
-        filter: [
-          // path.keyword is the non-analyzed sub-field; prefix ensures only
-          // Tanakh/* paths pass through (Torah / Nevi'im / Ketuvim).
-          { prefix: { 'path.keyword': 'Tanakh/' } },
-        ],
-      },
-    },
+  // Use Sefaria's search-wrapper with a simple GET request.
+  // GET never triggers a CORS preflight, so Sefaria's own
+  // Access-Control-Allow-Origin: * header is enough — no proxy needed.
+  const params = new URLSearchParams({
+    query,
+    type:           'text',
+    field:          'exact',
+    slop:           '0',
+    sort_type:      'score',
+    sort_direction: 'desc',
+    pgsize:         '100',
+    start:          '0',
   });
+  const url = `https://www.sefaria.org/api/search-wrapper/?${params}`;
 
-  const res = await fetch(PROXY_URL, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-  });
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   const hits = data?.hits?.hits || [];
 
   return hits.map(h => {
-    const src  = h._source || {};
-    const text = src.exact || '';
-    // Sefaria highlight already contains <mark> tags from pre/post_tags above
+    const src         = h._source || {};
+    const text        = src.exact || '';
     const displayHtml = h.highlight?.exact?.[0] || text;
-    // Parse English ref: "Genesis 1:1" → book="Genesis", ch=1, vs=1
-    const parsed = parseEnRef(src.ref || '');
+    const parsed      = parseEnRef(src.ref || '');
     return {
       heRef:   src.heRef || src.ref || '',
       enRef:   src.ref   || '',
@@ -230,14 +209,15 @@ async function searchSefaria(query) {
       bookEn:  parsed?.book    || '',
       chapter: parsed?.chapter || 1,
     };
-  // Client-side guard: keep only results whose book matches a known Tanakh book.
-  // This filters out commentaries / Talmud / Midrash that may slip through the ES query.
+  // Keep only verses from the 39 Tanakh books — filters out Talmud,
+  // Midrash, commentaries, and any English-language results.
   }).filter(r => r.text && TANAKH_BOOKS_EN.has(r.bookEn));
 }
 
-// Parse an English Sefaria ref like "Genesis 1:1" or "I Samuel 15:3"
+// Parse an English Sefaria ref like "Genesis 1:1" or "I Samuel 15:3".
+// Uses a non-anchored end so ranges like "Genesis 1:1-3" also match.
 function parseEnRef(ref) {
-  const m = ref.match(/^(.+?)\s+(\d+):(\d+)$/);
+  const m = ref.match(/^(.+?)\s+(\d+)[:\.](\d+)/);
   if (!m) return null;
   return { book: m[1], chapter: parseInt(m[2]), verse: parseInt(m[3]) };
 }
