@@ -64,11 +64,6 @@ const SECTIONS = {
   }
 };
 
-// Set of all Tanakh book English names — used to filter search results client-side
-const TANAKH_BOOKS_EN = new Set(
-  Object.values(SECTIONS).flatMap(sec => sec.books.map(b => b.en))
-);
-
 // Quick links shown on welcome screen
 const QUICK_BOOKS = [
   { sectionKey:'torah',   bookEn:'Genesis',      chapter:1,  icon:'📜', label:'בראשית',     sub:'פרק א' },
@@ -80,6 +75,9 @@ const QUICK_BOOKS = [
 ];
 
 // ===== STATE =====================================================
+
+// Populated from tanakh.json at startup — all 39 books, no API calls needed.
+let tanakhData = null;
 
 const state = {
   view:          'reader',
@@ -110,8 +108,23 @@ function makeId(bookEn, chapter, verse) {
   return `${bookEn}|${chapter}|${verse}`;
 }
 
-function bookApiRef(bookEn, chapter) {
-  return encodeURIComponent(`${bookEn.replace(/ /g, '_')}.${chapter}`);
+// Strip Hebrew vowel points and cantillation marks (U+0591–U+05C7) for search.
+function stripNikkud(str) {
+  return str.replace(/[\u0591-\u05C7]/g, '');
+}
+
+// Wrap search term in <mark> tags inside a verse, matching across nikkud.
+function highlightInVerse(verseText, query) {
+  const plain = stripNikkud(query);
+  if (!plain) return verseText;
+  // Build regex: each consonant may be followed by any number of nikkud chars
+  const NIKKUD = '[\\u0591-\\u05C7]*';
+  const pat    = [...plain]
+    .map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + NIKKUD)
+    .join('');
+  try {
+    return verseText.replace(new RegExp(`(${pat})`, 'g'), '<mark>$1</mark>');
+  } catch { return verseText; }
 }
 
 let toastTimer;
@@ -161,70 +174,54 @@ function saveCollection(arr) {
   localStorage.setItem('tanakh-collection', JSON.stringify(arr));
 }
 
-// ===== SEFARIA API ==============================================
+// ===== LOCAL DATA (tanakh.json) ==================================
 
-async function fetchChapter(bookEn, chapter) {
-  const ref = bookApiRef(bookEn, chapter);
-  const url = `https://www.sefaria.org/api/texts/${ref}?lang=he&commentary=0&context=0`;
-  const res  = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  // data.he can be nested for multi-part books; flatten
-  let verses = data.he || [];
-  if (verses.length && Array.isArray(verses[0])) verses = verses.flat();
-  return verses.map(v => stripHtml(String(v)));
+// Return verses for a chapter from the local JSON — instant, no network.
+function fetchChapter(bookEn, chapter) {
+  const chapters = tanakhData?.[bookEn];
+  if (!chapters) throw new Error(`ספר לא נמצא: ${bookEn}`);
+  const verses = chapters[chapter - 1];
+  if (!verses)  throw new Error(`פרק לא נמצא: ${bookEn} ${chapter}`);
+  return verses.filter(v => v.trim());
 }
 
-async function searchSefaria(query) {
-  // Sefaria exposes an Elasticsearch endpoint that accepts simple GET requests.
-  // GET never triggers a CORS preflight, so no proxy is needed at all.
-  //
-  // Lucene filters:
-  //   lang:he                            → Hebrew text only
-  //   categories:Tanakh                  → must belong to the Tanakh category
-  //   NOT categories:"Tanakh Commentary" → exclude all commentary books
-  //
-  // The same verse often exists in multiple text versions (Nikkud,
-  // Ta'amei HaMikra, plain text…). We deduplicate by English ref after
-  // fetching. A client-side TANAKH_BOOKS_EN check acts as a safety net.
+// Full-text search across all 23 K verses — runs in < 50 ms locally.
+function searchLocal(query) {
+  if (!tanakhData) return [];
+  const needle = stripNikkud(query.trim());
+  if (!needle) return [];
 
-  const safeQ  = query.replace(/"/g, '\\"');   // escape literal quotes
-  const lucene = `exact:"${safeQ}" AND lang:he AND categories:Tanakh AND NOT categories:"Tanakh Commentary"`;
-  const params = new URLSearchParams({ q: lucene, size: '50' });
-  const url    = `https://www.sefaria.org/api/search/text/_search?${params}`;
+  const results = [];
+  const MAX     = 50;
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  const hits = data?.hits?.hits || [];
+  for (const [secKey, sec] of Object.entries(SECTIONS)) {
+    for (const book of sec.books) {
+      const chapters = tanakhData[book.en];
+      if (!chapters) continue;
+      for (let ci = 0; ci < chapters.length; ci++) {
+        const ch = chapters[ci];
+        if (!ch) continue;
+        for (let vi = 0; vi < ch.length; vi++) {
+          const verseText = ch[vi];
+          if (!verseText) continue;
+          if (!stripNikkud(verseText).includes(needle)) continue;
 
-  const seen = new Set();
-  return hits.map(h => {
-    const src    = h._source || {};
-    const text   = src.exact || '';
-    const parsed = parseEnRef(src.ref || '');
-    return {
-      heRef:       src.heRef || src.ref || '',
-      enRef:       src.ref   || '',
-      text,
-      displayHtml: text,   // no server-side highlight available via GET
-      bookEn:      parsed?.book    || '',
-      chapter:     parsed?.chapter || 1,
-    };
-  }).filter(r => {
-    if (!r.text || !TANAKH_BOOKS_EN.has(r.bookEn)) return false;
-    if (seen.has(r.enRef)) return false;   // skip duplicate versions of same verse
-    seen.add(r.enRef);
-    return true;
-  });
-}
-
-// Parse an English Sefaria ref like "Genesis 1:1" or "I Samuel 15:3".
-// Uses a non-anchored end so ranges like "Genesis 1:1-3" also match.
-function parseEnRef(ref) {
-  const m = ref.match(/^(.+?)\s+(\d+)[:\.](\d+)/);
-  if (!m) return null;
-  return { book: m[1], chapter: parseInt(m[2]), verse: parseInt(m[3]) };
+          const chNum  = ci + 1;
+          const vNum   = vi + 1;
+          results.push({
+            heRef:       `${book.heShort} ${toHebrewNumeral(chNum)}:${toHebrewNumeral(vNum)}`,
+            enRef:       `${book.en} ${chNum}:${vNum}`,
+            text:        verseText,
+            displayHtml: highlightInVerse(verseText, query),
+            bookEn:      book.en,
+            chapter:     chNum,
+          });
+          if (results.length >= MAX) return results;
+        }
+      }
+    }
+  }
+  return results;
 }
 
 // ===== SIDEBAR ==================================================
@@ -311,27 +308,19 @@ function renderView() {
 
 // ===== READER VIEW ==============================================
 
-async function loadAndRenderChapter() {
+function loadAndRenderChapter() {
   if (!state.book) { renderWelcome(); return; }
-
-  const content = $('mainContent');
-  content.innerHTML = `<div class="loading"><div class="spinner"></div><span>טוען פרק...</span></div>`;
-  state.loading = true;
-
   try {
-    state.verses  = await fetchChapter(state.book.en, state.chapter);
-    state.loading = false;
+    state.verses = fetchChapter(state.book.en, state.chapter);
     renderReaderView();
   } catch (err) {
-    state.loading = false;
-    content.innerHTML = `<div class="error-box">שגיאה בטעינת הטקסט. אנא בדוק את החיבור לאינטרנט ונסה שנית.<br><small>${err.message}</small></div>`;
+    $('mainContent').innerHTML = `<div class="error-box">שגיאה בטעינת הטקסט.<br><small>${err.message}</small></div>`;
   }
 }
 
 function renderReaderView() {
   const content = $('mainContent');
   if (!state.book) { renderWelcome(); return; }
-  if (state.loading) return; // already showing spinner
 
   const { book, chapter, verses } = state;
   const chCount = book.chapters;
@@ -742,30 +731,10 @@ async function addManualVerse() {
 
 // ===== SEARCH ===================================================
 
-async function performSearch(query) {
+function performSearch(query) {
   if (!query.trim()) return;
-  state.searchLoading = true;
-  state.searchResults = [];
+  state.searchResults = searchLocal(query);
   setView('search');
-
-  const content = $('mainContent');
-  content.innerHTML = `
-    <h2 class="view-heading">🔍 חיפוש: "${query}"</h2>
-    <div class="loading"><div class="spinner"></div><span>מחפש בתנ"ך...</span></div>
-  `;
-
-  try {
-    state.searchResults = await searchSefaria(query);
-  } catch (err) {
-    state.searchResults = [];
-    content.innerHTML = `
-      <h2 class="view-heading">🔍 חיפוש: "${query}"</h2>
-      <div class="error-box">שגיאה בחיפוש. ודא שיש חיבור לאינטרנט ונסה שנית.<br><small>${err.message}</small></div>
-    `;
-    return;
-  }
-
-  state.searchLoading = false;
   renderSearchView(query);
 }
 
@@ -947,7 +916,27 @@ function wireEvents() {
 
 // ===== INIT =====================================================
 
-function init() {
+async function init() {
+  // Show a loading screen while tanakh.json downloads (~1.5 MB gzipped).
+  $('mainContent').innerHTML = `
+    <div class="loading" style="margin-top:20vh">
+      <div class="spinner"></div>
+      <span>טוען תנ״ך…</span>
+    </div>`;
+
+  try {
+    const res = await fetch('tanakh.json');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    tanakhData = await res.json();
+  } catch (err) {
+    $('mainContent').innerHTML = `
+      <div class="error-box" style="margin:4rem auto;max-width:480px">
+        <strong>שגיאה בטעינת קובץ התנ״ך</strong><br>
+        <small>${err.message}</small>
+      </div>`;
+    return;
+  }
+
   buildSidebar();
   wireEvents();
   renderWelcome();
