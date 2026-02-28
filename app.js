@@ -64,6 +64,11 @@ const SECTIONS = {
   }
 };
 
+// Set of all Tanakh book English names — used to filter search results client-side
+const TANAKH_BOOKS_EN = new Set(
+  Object.values(SECTIONS).flatMap(sec => sec.books.map(b => b.en))
+);
+
 // Quick links shown on welcome screen
 const QUICK_BOOKS = [
   { sectionKey:'torah',   bookEn:'Genesis',      chapter:1,  icon:'📜', label:'בראשית',     sub:'פרק א' },
@@ -122,6 +127,23 @@ function scrollTop() {
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
+// Convert an integer (1–400) to a Hebrew numeral string (Gematria).
+// Special cases: 15 → טו, 16 → טז (avoid divine name abbreviations).
+function toHebrewNumeral(n) {
+  const ONES     = ['','א','ב','ג','ד','ה','ו','ז','ח','ט'];
+  const TENS     = ['','י','כ','ל','מ','נ','ס','ע','פ','צ'];
+  const HUNDREDS = ['','ק','ר','ש','ת'];
+  let result = '', rem = n;
+  const h = Math.floor(rem / 100); rem %= 100;
+  if (h) result += HUNDREDS[h];
+  if (rem === 15) return result + 'טו';
+  if (rem === 16) return result + 'טז';
+  const t = Math.floor(rem / 10); const u = rem % 10;
+  if (t) result += TENS[t];
+  if (u) result += ONES[u];
+  return result;
+}
+
 // ===== LOCAL STORAGE =============================================
 
 function loadBookmarks() {
@@ -176,7 +198,9 @@ async function searchSefaria(query) {
           { term: { lang: 'he' } },
         ],
         filter: [
-          { prefix: { path: 'Tanakh' } },
+          // path.keyword is the non-analyzed sub-field; prefix ensures only
+          // Tanakh/* paths pass through (Torah / Nevi'im / Ketuvim).
+          { prefix: { 'path.keyword': 'Tanakh/' } },
         ],
       },
     },
@@ -206,7 +230,9 @@ async function searchSefaria(query) {
       bookEn:  parsed?.book    || '',
       chapter: parsed?.chapter || 1,
     };
-  }).filter(r => r.text);
+  // Client-side guard: keep only results whose book matches a known Tanakh book.
+  // This filters out commentaries / Talmud / Midrash that may slip through the ES query.
+  }).filter(r => r.text && TANAKH_BOOKS_EN.has(r.bookEn));
 }
 
 // Parse an English Sefaria ref like "Genesis 1:1" or "I Samuel 15:3"
@@ -328,7 +354,7 @@ function renderReaderView() {
   // Chapter selector options
   let chOptions = '';
   for (let i = 1; i <= chCount; i++) {
-    chOptions += `<option value="${i}" ${i === chapter ? 'selected' : ''}>פרק ${i}</option>`;
+    chOptions += `<option value="${i}" ${i === chapter ? 'selected' : ''}>פרק ${toHebrewNumeral(i)}</option>`;
   }
 
   // Verses HTML
@@ -343,7 +369,7 @@ function renderReaderView() {
 
   content.innerHTML = `
     <div class="reader-header">
-      <h1 class="chapter-title">${book.he} — פרק ${chapter}</h1>
+      <h1 class="chapter-title">${book.he} — פרק ${toHebrewNumeral(chapter)}</h1>
       <p class="chapter-subtitle">${book.heShort} · ${chCount} פרקים</p>
       <div class="chapter-nav">
         <label class="chapter-label">פרק:</label>
