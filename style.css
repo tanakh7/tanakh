@@ -526,6 +526,156 @@ ul,ol { list-style:none; }
 .manual-input:focus { outline:none; box-shadow:0 0 0 2px rgba(200,150,47,.2); }
 .manual-input::placeholder { color:var(--text-muted); }
 
+/* ===== NOTEBOOK (COLLECTION VIEW) ===== */
+
+.notebook-wrap { margin-bottom:24px; }
+
+.notebook {
+  background-color:#FAF6EA;
+  background-image:repeating-linear-gradient(
+    transparent 0, transparent 35px,
+    rgba(155,125,18,.1) 35px, rgba(155,125,18,.1) 36px
+  );
+  border-radius:3px 10px 10px 3px;
+  position:relative; overflow:hidden;
+  box-shadow:
+    0 2px 8px rgba(44,26,14,.1),
+    0 14px 44px rgba(44,26,14,.18),
+    inset 0 0 0 1px rgba(200,150,47,.14);
+}
+
+/* Right-side binding spine (RTL — the bound edge) */
+.notebook::before {
+  content:'';
+  position:absolute; top:0; right:0; bottom:0; width:30px;
+  background:linear-gradient(to left,
+    rgba(44,26,14,.13) 0%, rgba(200,150,47,.06) 65%, transparent 100%);
+  border-right:3px solid rgba(44,26,14,.17);
+  pointer-events:none; z-index:1;
+}
+
+/* Left page-edge shadow (free edge of leaf) */
+.notebook::after {
+  content:'';
+  position:absolute; top:0; left:0; bottom:0; width:6px;
+  background:linear-gradient(to right, rgba(44,26,14,.07), transparent);
+  pointer-events:none; z-index:1;
+}
+
+.notebook-inner {
+  padding:44px 50px 44px 36px;
+  margin-right:30px;                            /* clear the spine */
+  border-right:1.5px solid rgba(200,80,50,.16); /* classic margin line */
+}
+
+/* Title block */
+.nb-title-area {
+  text-align:center;
+  margin-bottom:32px; padding-bottom:22px;
+  border-bottom:1px solid rgba(200,150,47,.22);
+}
+.nb-main-title {
+  font-family:'Frank Ruhl Libre',serif;
+  font-size:48px; font-weight:900; color:var(--brown-dark);
+  letter-spacing:3px; line-height:1; margin-bottom:8px;
+}
+.nb-sub-title {
+  font-family:'Heebo',sans-serif; font-size:13px;
+  color:var(--text-muted); letter-spacing:1.5px; margin-bottom:10px;
+}
+.nb-orn { color:var(--gold); font-size:16px; letter-spacing:10px; opacity:.7; }
+
+/* Entry list */
+.nb-list { list-style:none; }
+
+/* Base entry */
+.nb-entry {
+  display:flex; align-items:flex-start; gap:8px;
+  padding:10px 2px;
+  border-bottom:1px solid rgba(200,150,47,.1);
+  position:relative; transition:background var(--ease);
+}
+.nb-entry:last-child { border-bottom:none; }
+.nb-entry:hover { background:rgba(200,150,47,.055); }
+.nb-entry.dragging { opacity:.4; transform:scale(.99); }
+.nb-entry.drag-over-top    { border-top:2px solid var(--gold); }
+.nb-entry.drag-over-bottom { border-bottom:2px solid var(--gold); }
+
+.nb-drag {
+  flex-shrink:0; width:16px; padding-top:3px;
+  color:rgba(200,150,47,.2); font-size:14px; letter-spacing:-2px;
+  cursor:grab; user-select:none; transition:color var(--ease);
+}
+.nb-entry:hover .nb-drag { color:rgba(200,150,47,.65); }
+.nb-drag:active { cursor:grabbing; }
+
+.nb-body { flex:1; min-width:0; }
+
+/* Book entries */
+.nb-entry-book {
+  padding:24px 2px 16px;
+  border-bottom:1px solid rgba(200,150,47,.25);
+}
+.nb-book-heading {
+  display:flex; align-items:center; justify-content:center;
+  gap:18px; text-align:center;
+}
+.nb-book-name {
+  font-family:'Frank Ruhl Libre',serif;
+  font-size:30px; font-weight:900; color:var(--brown-dark); letter-spacing:1px;
+}
+.nb-book-orn { color:var(--gold); opacity:.65; flex-shrink:0; font-size:18px; }
+
+/* Chapter entries */
+.nb-entry-chapter { padding:16px 2px 8px; }
+.nb-chapter-heading { display:flex; align-items:baseline; gap:12px; }
+.nb-chapter-num {
+  font-family:'Frank Ruhl Libre',serif;
+  font-size:22px; font-weight:700; color:var(--brown-dark);
+}
+.nb-chapter-rule {
+  height:1px; margin-top:8px;
+  background:linear-gradient(to left, rgba(200,150,47,.35), transparent 80%);
+}
+
+/* Verse entries */
+.nb-entry-verse { padding:12px 2px; }
+.nb-verse-ref {
+  font-family:'Heebo',sans-serif; font-size:11px;
+  color:var(--gold); font-weight:600; letter-spacing:.5px; margin-bottom:5px;
+}
+.nb-verse-text {
+  font-family:'Frank Ruhl Libre',serif;
+  font-size:20px; line-height:1.9; color:var(--text);
+}
+
+/* Hover action buttons */
+.nb-actions {
+  flex-shrink:0; display:flex; flex-direction:column;
+  align-items:center; gap:1px; padding-top:2px;
+  opacity:0; transition:opacity var(--ease);
+}
+.nb-entry:hover .nb-actions { opacity:1; }
+.nb-act-btn {
+  width:22px; height:22px;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:3px; font-size:11px; color:var(--brown-light);
+  transition:all var(--ease);
+}
+.nb-act-btn:hover { background:var(--gold-pale); color:var(--brown-dark); }
+.nb-act-btn.del:hover { background:#fde8e8; color:#c0392b; }
+
+/* Empty notebook state */
+.nb-empty {
+  text-align:center; padding:52px 20px; color:var(--text-muted);
+}
+.nb-empty-icon { font-size:48px; opacity:.3; display:block; margin-bottom:14px; }
+.nb-empty h3 {
+  font-family:'Frank Ruhl Libre',serif; font-size:22px;
+  color:var(--brown-med); margin-bottom:8px;
+}
+.nb-empty p { font-family:'Heebo',sans-serif; font-size:14px; }
+
 /* ===== FLOATING VERSE ACTIONS ===== */
 .verse-actions {
   position:fixed; z-index:200;
@@ -638,16 +788,22 @@ ul,ol { list-style:none; }
   .content { margin:0; padding:20px; max-width:100%; }
   body { background:#fff; }
 
-  .collection-item {
-    page-break-inside:avoid;
-    border:1px solid #bbb;
-    margin-bottom:12px;
-    box-shadow:none;
+  /* Notebook print overrides */
+  .notebook {
+    box-shadow:none !important; background-image:none !important;
+    background-color:#fff !important;
   }
-  .coll-item-ref { color:#666; }
-  .coll-item-text { font-size:16pt; color:#000; }
+  .notebook::before, .notebook::after { display:none !important; }
+  .notebook-inner { margin-right:0 !important; border-right:none !important; padding:20px !important; }
+  .nb-drag, .nb-actions { display:none !important; }
+  .nb-entry { page-break-inside:avoid; border-bottom:1px solid #ddd !important; }
+  .nb-verse-ref { color:#888 !important; }
+  .nb-verse-text, .nb-book-name, .nb-chapter-num { color:#000 !important; }
+  .nb-main-title, .nb-sub-title, .nb-orn { color:#000 !important; }
+  .nb-book-orn { display:none; }
+  .nb-chapter-rule { background:#ccc !important; }
 
-  .view-heading::before { content:'האוסף שלי'; }
+  .view-heading::before { content:'התנ"ך שלי'; }
 }
 
 /* ===== RESPONSIVE ===== */
@@ -684,6 +840,13 @@ ul,ol { list-style:none; }
   .copy-link { grid-column:span 1; }
   .chapter-nav { flex-direction:column; align-items:flex-start; }
   .verse-text { font-size:18px; }
+
+  /* Notebook — mobile */
+  .notebook-inner { padding:24px 20px 24px 16px; margin-right:16px; }
+  .nb-main-title { font-size:34px; letter-spacing:1px; }
+  .nb-book-name { font-size:22px; }
+  .nb-verse-text { font-size:17px; }
+  .nb-actions { opacity:1; } /* always visible — no hover on touch */
 }
 
 @media (max-width:480px) {

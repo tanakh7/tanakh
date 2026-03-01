@@ -702,61 +702,18 @@ function renderCollectionView() {
   const col     = loadCollection();
   const content = $('mainContent');
 
-  const emptyNotice = col.length
-    ? ''
-    : `<div class="empty-state">
-        <span class="empty-icon">🗂</span>
-        <h3>האוסף ריק</h3>
-        <p>לחץ על פסוק בעת קריאה ובחר "הוסף לאוסף".</p>
-      </div>`;
-
-  const items = col.map((item, idx) => {
-    const type = item.type || 'verse';
-    let bodyHtml = '';
-    let readOnclick = '';
-    let shareBtn = '';
-
-    if (type === 'verse') {
-      bodyHtml    = `<div class="coll-item-ref">${item.ref}</div><div class="coll-item-text">${item.text}</div>`;
-      readOnclick = `goToVerse('${item.bookEn}','${item.chapter}','${item.verse}')`;
-      shareBtn    = `<button class="coll-ctrl-btn" title="שתף" onclick='showShareModal(${JSON.stringify(item)})'>📤</button>`;
-    } else if (type === 'chapter') {
-      bodyHtml    = `<div class="coll-item-type">פרק</div><div class="coll-item-ref">${item.ref}</div>`;
-      readOnclick = `goToChapter('${item.bookEn}',${item.chapter})`;
-    } else if (type === 'book') {
-      bodyHtml    = `<div class="coll-item-type">ספר</div><div class="coll-item-ref">${item.ref}</div>`;
-      readOnclick = `goToChapter('${item.bookEn}',1)`;
-    }
-
-    return `
-      <li class="collection-item" draggable="true" data-id="${item.id}" data-idx="${idx}">
-        <div class="drag-handle" title="גרור לסידור מחדש">⠿</div>
-        <div class="coll-item-body">${bodyHtml}</div>
-        <div class="coll-item-controls">
-          <button class="coll-ctrl-btn" title="העלה" onclick="moveCollectionItem('${item.id}',-1)">▲</button>
-          ${shareBtn}
-          <button class="coll-ctrl-btn" title="קרא" onclick="${readOnclick}">📖</button>
-          <button class="coll-ctrl-btn del" title="הסר" onclick="removeFromCollection('${item.id}')">🗑</button>
-          <button class="coll-ctrl-btn" title="הורד" onclick="moveCollectionItem('${item.id}',1)">▼</button>
-        </div>
-      </li>`;
-  }).join('');
-
-  content.innerHTML = `
-    <div class="view-header">
-      <h2 class="view-heading">🗂 האוסף שלי ${col.length ? '(' + col.length + ')' : ''}</h2>
-      <div class="coll-actions no-print">
+  const toolbar = `
+    <div class="view-header no-print">
+      <h2 class="view-heading">📔 האוסף שלי ${col.length ? '(' + col.length + ')' : ''}</h2>
+      <div class="coll-actions">
         ${col.length ? `
           <button class="btn-primary"   onclick="printCollection()">🖨 הדפס</button>
           <button class="btn-secondary" onclick="clearCollection()">🗑 נקה</button>
         ` : ''}
       </div>
-    </div>
+    </div>`;
 
-    ${emptyNotice}
-
-    <ul class="collection-list" id="collectionList">${items}</ul>
-
+  const manualAdd = `
     <div class="manual-add no-print">
       <h4>הוסף פסוק ידנית (לדוגמה: <em>תהלים 23:1</em>)</h4>
       <div class="manual-add-row">
@@ -764,8 +721,92 @@ function renderCollectionView() {
                placeholder="שם ספר (עברית/אנגלית) + מספר פרק:פסוק" />
         <button class="btn-primary" onclick="addManualVerse()">הוסף</button>
       </div>
+    </div>`;
+
+  if (!col.length) {
+    content.innerHTML = toolbar + `
+      <div class="notebook-wrap">
+        <div class="notebook">
+          <div class="notebook-inner">
+            <div class="nb-title-area">
+              <h1 class="nb-main-title">התנ"ך שלי</h1>
+              <div class="nb-orn">✦ · ✦</div>
+            </div>
+            <div class="nb-empty">
+              <span class="nb-empty-icon">📔</span>
+              <h3>האוסף עדיין ריק</h3>
+              <p>הוסף פסוקים, פרקים וספרים לאוסף האישי שלך</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    ` + manualAdd;
+    return;
+  }
+
+  const items = col.map((item, idx) => {
+    const type = item.type || 'verse';
+    let inner = '';
+    let readOnclick = '';
+    let shareBtn = '';
+    let typeClass = '';
+
+    if (type === 'book') {
+      typeClass    = 'nb-entry-book';
+      readOnclick  = `goToChapter('${item.bookEn}',1)`;
+      inner = `
+        <div class="nb-book-heading">
+          <span class="nb-book-orn">✦</span>
+          <span class="nb-book-name">${item.ref}</span>
+          <span class="nb-book-orn">✦</span>
+        </div>`;
+
+    } else if (type === 'chapter') {
+      typeClass    = 'nb-entry-chapter';
+      readOnclick  = `goToChapter('${item.bookEn}',${item.chapter})`;
+      inner = `
+        <div class="nb-chapter-heading">
+          <span class="nb-chapter-num">${item.ref}</span>
+        </div>
+        <div class="nb-chapter-rule"></div>`;
+
+    } else {
+      typeClass    = 'nb-entry-verse';
+      readOnclick  = `goToVerse('${item.bookEn}','${item.chapter}','${item.verse}')`;
+      shareBtn     = `<button class="nb-act-btn" title="שתף" onclick='showShareModal(${JSON.stringify(item)})'>📤</button>`;
+      inner = `
+        <div class="nb-verse-ref">${item.ref}</div>
+        <div class="nb-verse-text">${item.text}</div>`;
+    }
+
+    return `
+      <li class="nb-entry ${typeClass}" draggable="true" data-id="${item.id}" data-idx="${idx}">
+        <div class="nb-drag" title="גרור לסידור מחדש">⠿</div>
+        <div class="nb-body">${inner}</div>
+        <div class="nb-actions">
+          <button class="nb-act-btn" title="העלה" onclick="moveCollectionItem('${item.id}',-1)">▲</button>
+          ${shareBtn}
+          <button class="nb-act-btn" title="קרא" onclick="${readOnclick}">📖</button>
+          <button class="nb-act-btn del" title="הסר" onclick="removeFromCollection('${item.id}')">🗑</button>
+          <button class="nb-act-btn" title="הורד" onclick="moveCollectionItem('${item.id}',1)">▼</button>
+        </div>
+      </li>`;
+  }).join('');
+
+  content.innerHTML = toolbar + `
+    <div class="notebook-wrap">
+      <div class="notebook">
+        <div class="notebook-inner">
+          <div class="nb-title-area">
+            <h1 class="nb-main-title">התנ"ך שלי</h1>
+            <p class="nb-sub-title">${col.length} פריטים באוסף</p>
+            <div class="nb-orn">✦ · ✦</div>
+          </div>
+          <ul class="nb-list" id="collectionList">${items}</ul>
+        </div>
+      </div>
     </div>
-  `;
+  ` + manualAdd;
 
   initDragDrop();
 }
@@ -787,7 +828,7 @@ function initDragDrop() {
   if (!list) return;
   let dragSrcIdx = null;
 
-  list.querySelectorAll('.collection-item').forEach((item, idx) => {
+  list.querySelectorAll('.nb-entry').forEach((item, idx) => {
     item.addEventListener('dragstart', e => {
       dragSrcIdx = idx;
       item.classList.add('dragging');
@@ -795,7 +836,7 @@ function initDragDrop() {
     });
     item.addEventListener('dragend', () => {
       item.classList.remove('dragging');
-      list.querySelectorAll('.collection-item').forEach(el => {
+      list.querySelectorAll('.nb-entry').forEach(el => {
         el.classList.remove('drag-over-top', 'drag-over-bottom');
       });
       dragSrcIdx = null;
