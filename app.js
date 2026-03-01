@@ -270,8 +270,8 @@ function buildSidebar() {
 
       const collectBtn = document.createElement('button');
       collectBtn.className = `book-collect-btn${isBookCollected ? ' collected' : ''}`;
-      collectBtn.title = isBookCollected ? 'הספר באוסף — לחץ להסרה' : 'הוסף ספר לאוסף';
-      collectBtn.textContent = isBookCollected ? '✓' : '+';
+      collectBtn.title = isBookCollected ? 'לחץ להסרה מהאוסף' : 'הוסף את כל הספר לאוסף';
+      collectBtn.textContent = isBookCollected ? '✓ הספר באוסף' : '+ הוסף ספר לאוסף';
       collectBtn.addEventListener('click', e => {
         e.stopPropagation();
         if (isBookCollected) {
